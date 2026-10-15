@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Smart Retail System - Amazon EventBridge Scheduler for Automated Predictions & Alerts'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(0 6 * * ? *)' # Runs daily at 06:00 UTC
+    Description: 'Cron or rate expression for the prediction job'
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+  DailyPredictionSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub 'smart-retail-daily-prediction-job-${Environment}'
+      Description: 'Runs 7-day demand forecasting model and triggers deduplicated SNS inventory alerts'
+      ScheduleExpression: !Ref ScheduleExpression
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      State: ENABLED
+      Target:
+        Arn: !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/smart-retail-cluster-${Environment}'
+        RoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-scheduler-role-${Environment}'
+        EcsParameters:
+          TaskDefinitionArn: !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/smart-retail-inventory-${Environment}'
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsVpcConfiguration:
+              AssignPublicIp: ENABLED
+              Subnets: !Ref SubnetIds
+              SecurityGroups: [!Ref SecurityGroupId]
+          Overrides:
+            ContainerOverrides:
+              - Name: inventory-service
+                Command:
+                  - python
+                  - -m
+                  - services.inventory.app.jobs.run_predictions
+
+Outputs:
+  ScheduleArn:
+    Value: !GetAtt DailyPredictionSchedule.Arn

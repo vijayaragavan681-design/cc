@@ -1,0 +1,173 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Smart Retail System - Least-Privilege IAM Roles for ECS Services & Scheduler'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+
+Resources:
+  # 1. ECS Task Execution Role (Pulling images, CloudWatch logs)
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'smart-retail-ecs-execution-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # 2. Retail Store Task Role (Least privilege for Retail Store Service)
+  RetailStoreTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'smart-retail-store-task-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: RetailStoreDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/RetailInventory-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/RetailInventory-${Environment}/index/*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/Sales-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/Sales-${Environment}/index/*'
+
+  # 3. Inventory & ML Prediction Task Role (Least privilege for Inventory Service & Scheduled Job)
+  InventoryTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'smart-retail-inventory-task-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: InventoryServiceDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/RetailInventory-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/RetailInventory-${Environment}/index/*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/Sales-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/InventoryPredictions-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/InventoryAlerts-${Environment}'
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:smart-retail-inventory-alerts-${Environment}'
+
+  # 4. Warehouse Task Role (Least privilege for Warehouse Service)
+  WarehouseTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'smart-retail-warehouse-task-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: WarehouseDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/WarehouseRequests-${Environment}'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/RetailInventory-${Environment}'
+
+  # 5. EventBridge Scheduler Execution Role (Specifically scoped to run the Inventory task)
+  EventBridgeSchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'smart-retail-scheduler-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [scheduler.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: RunECSTaskPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                Resource:
+                  - !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/smart-retail-inventory-*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt ECSTaskExecutionRole.Arn
+                  - !GetAtt InventoryTaskRole.Arn
+
+Outputs:
+  ECSTaskExecutionRoleArn:
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ECSTaskExecutionRoleArn'
+  RetailStoreTaskRoleArn:
+    Value: !GetAtt RetailStoreTaskRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RetailStoreTaskRoleArn'
+  InventoryTaskRoleArn:
+    Value: !GetAtt InventoryTaskRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-InventoryTaskRoleArn'
+  WarehouseTaskRoleArn:
+    Value: !GetAtt WarehouseTaskRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WarehouseTaskRoleArn'
+  EventBridgeSchedulerRoleArn:
+    Value: !GetAtt EventBridgeSchedulerRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SchedulerRoleArn'

@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Smart Retail System - Amazon SNS Topic and Email Alerting'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+  AlertEmailRecipient:
+    Type: String
+    Description: 'Email address to receive inventory and expiry alerts (requires confirmation)'
+    Default: 'store-ops@example.com'
+
+Resources:
+  InventoryAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'smart-retail-inventory-alerts-${Environment}'
+      DisplayName: 'Smart Retail Inventory & Expiry Alerts'
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref InventoryAlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmailRecipient
+
+Outputs:
+  InventoryAlertsTopicArn:
+    Value: !Ref InventoryAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertsTopicArn'

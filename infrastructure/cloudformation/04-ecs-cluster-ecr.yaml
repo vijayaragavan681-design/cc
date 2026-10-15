@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Smart Retail System - ECS Cluster, CloudWatch Log Groups & ECR Repositories'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+
+Resources:
+  # ECR Repositories
+  RetailStoreRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'smart-retail/store-service-${Environment}'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  InventoryRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'smart-retail/inventory-service-${Environment}'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  WarehouseRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'smart-retail/warehouse-service-${Environment}'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  # CloudWatch Log Groups
+  RetailStoreLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/smart-retail-store-${Environment}'
+      RetentionInDays: 30
+
+  InventoryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/smart-retail-inventory-${Environment}'
+      RetentionInDays: 30
+
+  WarehouseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/smart-retail-warehouse-${Environment}'
+      RetentionInDays: 30
+
+  ScheduledJobLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/smart-retail-scheduled-job-${Environment}'
+      RetentionInDays: 30
+
+  # ECS Fargate Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'smart-retail-cluster-${Environment}'
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+
+Outputs:
+  ECSClusterName:
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ECSClusterName'
+  ECSClusterArn:
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ECSClusterArn'
+  RetailStoreRepoUri:
+    Value: !GetAtt RetailStoreRepository.RepositoryUri
+  InventoryRepoUri:
+    Value: !GetAtt InventoryRepository.RepositoryUri
+  WarehouseRepoUri:
+    Value: !GetAtt WarehouseRepository.RepositoryUri

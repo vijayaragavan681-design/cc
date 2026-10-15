@@ -1,0 +1,94 @@
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: smart-retail-dynamodb-local
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    ports:
+      - "8000:8000"
+    networks:
+      - retail-network
+
+  retail-store:
+    build:
+      context: .
+      dockerfile: services/retail-store/Dockerfile
+    container_name: smart-retail-store-service
+    ports:
+      - "8001:8001"
+    environment:
+      - AWS_REGION=us-east-1
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - AWS_ACCESS_KEY_ID=DUMMYKEY
+      - AWS_SECRET_ACCESS_KEY=DUMMYSECRET
+      - INVENTORY_TABLE_NAME=RetailInventory
+      - SALES_TABLE_NAME=Sales
+      - WAREHOUSE_SERVICE_URL=http://warehouse:8003
+      - AUTH_MODE=MOCK
+    depends_on:
+      - dynamodb-local
+    networks:
+      - retail-network
+
+  inventory:
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    container_name: smart-retail-inventory-service
+    ports:
+      - "8002:8002"
+    environment:
+      - AWS_REGION=us-east-1
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - AWS_ACCESS_KEY_ID=DUMMYKEY
+      - AWS_SECRET_ACCESS_KEY=DUMMYSECRET
+      - INVENTORY_TABLE_NAME=RetailInventory
+      - SALES_TABLE_NAME=Sales
+      - PREDICTIONS_TABLE_NAME=InventoryPredictions
+      - ALERTS_TABLE_NAME=InventoryAlerts
+      - MODEL_PATH=/app/ml/artifacts/demand_model.joblib
+      - MODEL_METADATA_PATH=/app/ml/artifacts/model_metadata.json
+      - AUTH_MODE=MOCK
+      - SAFETY_STOCK_FACTOR=1.2
+      - EXCESS_STOCK_COVERAGE_DAYS=21
+    depends_on:
+      - dynamodb-local
+    networks:
+      - retail-network
+
+  warehouse:
+    build:
+      context: .
+      dockerfile: services/warehouse/Dockerfile
+    container_name: smart-retail-warehouse-service
+    ports:
+      - "8003:8003"
+    environment:
+      - AWS_REGION=us-east-1
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - AWS_ACCESS_KEY_ID=DUMMYKEY
+      - AWS_SECRET_ACCESS_KEY=DUMMYSECRET
+      - WAREHOUSE_REQUESTS_TABLE_NAME=WarehouseRequests
+      - INVENTORY_TABLE_NAME=RetailInventory
+      - AUTH_MODE=MOCK
+    depends_on:
+      - dynamodb-local
+    networks:
+      - retail-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smart-retail-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - retail-store
+      - inventory
+      - warehouse
+    networks:
+      - retail-network
+
+networks:
+  retail-network:
+    driver: bridge

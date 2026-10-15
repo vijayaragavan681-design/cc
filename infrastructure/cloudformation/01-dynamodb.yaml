@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Smart Retail System - DynamoDB Persistent Tables & Secondary Indexes'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+
+Resources:
+  RetailInventoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'RetailInventory-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: storeId
+          AttributeType: S
+        - AttributeName: productId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: storeId
+          KeyType: HASH
+        - AttributeName: productId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: ProductIdIndex
+          KeySchema:
+            - AttributeName: productId
+              KeyType: HASH
+            - AttributeName: storeId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  SalesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'Sales-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: storeId
+          AttributeType: S
+        - AttributeName: saleTimestampAndSaleId
+          AttributeType: S
+        - AttributeName: customerId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: storeId
+          KeyType: HASH
+        - AttributeName: saleTimestampAndSaleId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: CustomerIdIndex
+          KeySchema:
+            - AttributeName: customerId
+              KeyType: HASH
+            - AttributeName: saleTimestampAndSaleId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  InventoryPredictionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'InventoryPredictions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: storeId
+          AttributeType: S
+        - AttributeName: productId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: storeId
+          KeyType: HASH
+        - AttributeName: productId
+          KeyType: RANGE
+
+  InventoryAlertsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'InventoryAlerts-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: storeId
+          AttributeType: S
+        - AttributeName: alertId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: storeId
+          KeyType: HASH
+        - AttributeName: alertId
+          KeyType: RANGE
+
+  WarehouseRequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'WarehouseRequests-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: storeId
+          AttributeType: S
+        - AttributeName: requestId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: storeId
+          KeyType: HASH
+        - AttributeName: requestId
+          KeyType: RANGE
+
+Outputs:
+  RetailInventoryTableArn:
+    Value: !GetAtt RetailInventoryTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RetailInventoryTableArn'
+  SalesTableArn:
+    Value: !GetAtt SalesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SalesTableArn'
+  InventoryPredictionsTableArn:
+    Value: !GetAtt InventoryPredictionsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-PredictionsTableArn'
+  InventoryAlertsTableArn:
+    Value: !GetAtt InventoryAlertsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertsTableArn'
+  WarehouseRequestsTableArn:
+    Value: !GetAtt WarehouseRequestsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WarehouseRequestsTableArn'

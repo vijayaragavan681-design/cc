@@ -1,0 +1,65 @@
+{
+  "model_version": "1.0.0",
+  "training_date": "2026-10-15T13:23:00.896191",
+  "dataset_version": "synthetic_sales_v1",
+  "feature_names": [
+    "store_id",
+    "product_id",
+    "category",
+    "price",
+    "available_stock",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "is_promotion",
+    "lag_0",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "rolling_mean_7d",
+    "rolling_std_7d",
+    "rolling_mean_14d",
+    "rolling_mean_28d",
+    "recent_stockouts_7d"
+  ],
+  "categorical_features": [
+    "store_id",
+    "product_id",
+    "category"
+  ],
+  "numerical_features": [
+    "price",
+    "available_stock",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "is_promotion",
+    "lag_0",
+    "lag_1",
+    "lag_2",
+    "lag_3",
+    "lag_7",
+    "lag_14",
+    "rolling_mean_7d",
+    "rolling_std_7d",
+    "rolling_mean_14d",
+    "rolling_mean_28d",
+    "recent_stockouts_7d"
+  ],
+  "evaluation_metrics": {
+    "test_mae": 11.6987,
+    "test_rmse": 15.722,
+    "test_wape": 0.0741,
+    "baseline_mae": 19.4282,
+    "baseline_rmse": 25.9455,
+    "baseline_wape": 0.123
+  },
+  "training_config": {
+    "n_estimators": 120,
+    "max_depth": 12,
+    "random_seed": 42,
+    "forecast_horizon_days": 7
+  }
+}

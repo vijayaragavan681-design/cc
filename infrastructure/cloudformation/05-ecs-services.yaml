@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Smart Retail System - Independently Deployable ECS Fargate Services'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  ECRStoreImageUri:
+    Type: String
+  ECRInventoryImageUri:
+    Type: String
+  ECRWarehouseImageUri:
+    Type: String
+  AzureTenantId:
+    Type: String
+    Default: ''
+  AzureApiClientId:
+    Type: String
+    Default: ''
+
+Resources:
+  # 1. Retail Store Task Definition & Service
+  RetailStoreTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'smart-retail-store-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-ecs-execution-role-${Environment}'
+      TaskRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-store-task-role-${Environment}'
+      ContainerDefinitions:
+        - Name: retail-store
+          Image: !Ref ECRStoreImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8001
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref 'AWS::Region'
+            - Name: INVENTORY_TABLE_NAME
+              Value: !Sub 'RetailInventory-${Environment}'
+            - Name: SALES_TABLE_NAME
+              Value: !Sub 'Sales-${Environment}'
+            - Name: AZURE_TENANT_ID
+              Value: !Ref AzureTenantId
+            - Name: AZURE_API_CLIENT_ID
+              Value: !Ref AzureApiClientId
+            - Name: AUTH_MODE
+              Value: 'ENTRA_ID'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '/ecs/smart-retail-store-${Environment}'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: store
+
+  RetailStoreService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub 'retail-store-service-${Environment}'
+      Cluster: !Sub 'smart-retail-cluster-${Environment}'
+      TaskDefinition: !Ref RetailStoreTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref SecurityGroupId]
+
+  # 2. Inventory & ML Prediction Task Definition & Service
+  InventoryTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'smart-retail-inventory-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '1024'
+      Memory: '2048'
+      ExecutionRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-ecs-execution-role-${Environment}'
+      TaskRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-inventory-task-role-${Environment}'
+      ContainerDefinitions:
+        - Name: inventory-service
+          Image: !Ref ECRInventoryImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8002
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref 'AWS::Region'
+            - Name: INVENTORY_TABLE_NAME
+              Value: !Sub 'RetailInventory-${Environment}'
+            - Name: SALES_TABLE_NAME
+              Value: !Sub 'Sales-${Environment}'
+            - Name: PREDICTIONS_TABLE_NAME
+              Value: !Sub 'InventoryPredictions-${Environment}'
+            - Name: ALERTS_TABLE_NAME
+              Value: !Sub 'InventoryAlerts-${Environment}'
+            - Name: SNS_TOPIC_ARN
+              Value: !Sub 'arn:aws:sns:${AWS::Region}:${AWS::AccountId}:smart-retail-inventory-alerts-${Environment}'
+            - Name: AZURE_TENANT_ID
+              Value: !Ref AzureTenantId
+            - Name: AZURE_API_CLIENT_ID
+              Value: !Ref AzureApiClientId
+            - Name: AUTH_MODE
+              Value: 'ENTRA_ID'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '/ecs/smart-retail-inventory-${Environment}'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: inventory
+
+  InventoryService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub 'inventory-service-${Environment}'
+      Cluster: !Sub 'smart-retail-cluster-${Environment}'
+      TaskDefinition: !Ref InventoryTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 2
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref SecurityGroupId]
+
+  # 3. Warehouse Task Definition & Service
+  WarehouseTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'smart-retail-warehouse-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-ecs-execution-role-${Environment}'
+      TaskRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/smart-retail-warehouse-task-role-${Environment}'
+      ContainerDefinitions:
+        - Name: warehouse-service
+          Image: !Ref ECRWarehouseImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8003
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref 'AWS::Region'
+            - Name: WAREHOUSE_REQUESTS_TABLE_NAME
+              Value: !Sub 'WarehouseRequests-${Environment}'
+            - Name: INVENTORY_TABLE_NAME
+              Value: !Sub 'RetailInventory-${Environment}'
+            - Name: AZURE_TENANT_ID
+              Value: !Ref AzureTenantId
+            - Name: AZURE_API_CLIENT_ID
+              Value: !Ref AzureApiClientId
+            - Name: AUTH_MODE
+              Value: 'ENTRA_ID'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '/ecs/smart-retail-warehouse-${Environment}'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: warehouse
+
+  WarehouseService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub 'warehouse-service-${Environment}'
+      Cluster: !Sub 'smart-retail-cluster-${Environment}'
+      TaskDefinition: !Ref WarehouseTaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Ref SubnetIds
+          SecurityGroups: [!Ref SecurityGroupId]
+
+Outputs:
+  InventoryTaskDefinitionArn:
+    Value: !Ref InventoryTaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-InventoryTaskDefArn'
